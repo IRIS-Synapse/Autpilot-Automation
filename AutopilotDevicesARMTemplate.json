@@ -1,0 +1,188 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "automationAccountName": {
+      "type": "string",
+      "defaultValue": "YourAutomationAccountName",
+      "metadata": {
+        "description": "Name of the Azure Automation account."
+      }
+    },
+    "runbookName": {
+      "type": "string",
+      "defaultValue": "GetAutopilotDevices",
+      "metadata": {
+        "description": "Name of the Runbook."
+      }
+    },
+    "runbookType": {
+      "type": "string",
+      "defaultValue": "PowerShell",
+      "allowedValues": [
+        "PowerShell",
+        "PowerShellWorkflow",
+        "Graph",
+        "Python2",
+        "Python3"
+      ],
+      "metadata": {
+        "description": "Type of the Runbook."
+      }
+    },
+    "workspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Your Log Analytics Workspace ID."
+      }
+    },
+    "workspaceKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Your Log Analytics Workspace Primary Key."
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "metadata": {
+        "description": "Your Azure AD Tenant ID."
+      }
+    },
+    "clientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Client ID of the Service Principal."
+      }
+    },
+    "clientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Client Secret of the Service Principal."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    }
+  },
+  "variables": {
+    "modules": [
+      "Az.Accounts",
+      "Az.Automation"
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Automation/automationAccounts",
+      "apiVersion": "2020-01-13-preview",
+      "name": "[parameters('automationAccountName')]",
+      "location": "[parameters('location')]",
+      "properties": {},
+      "resources": [
+        {
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "name": "WorkspaceId",
+          "dependsOn": [
+            "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('workspaceId')]"
+          }
+        },
+        {
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "name": "TenantId",
+          "dependsOn": [
+            "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('tenantId')]"
+          }
+        },
+        {
+          "type": "variables",
+          "apiVersion": "2015-10-31",
+          "name": "ClientId",
+          "dependsOn": [
+            "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+          ],
+          "properties": {
+            "value": "[parameters('clientId')]"
+          }
+        },
+        {
+          "type": "credentials",
+          "apiVersion": "2015-10-31",
+          "name": "WorkspaceKey",
+          "dependsOn": [
+            "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+          ],
+          "properties": {
+            "description": "Log Analytics Workspace Key",
+            "userName": "WorkspaceKey",
+            "password": "[parameters('workspaceKey')]"
+          }
+        },
+        {
+          "type": "credentials",
+          "apiVersion": "2015-10-31",
+          "name": "ClientSecret",
+          "dependsOn": [
+            "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+          ],
+          "properties": {
+            "description": "Service Principal Client Secret",
+            "userName": "ClientSecret",
+            "password": "[parameters('clientSecret')]"
+          }
+        },
+        {
+          "type": "runbooks",
+          "apiVersion": "2020-01-13-preview",
+          "name": "[concat(parameters('automationAccountName'), '/', parameters('runbookName'))]",
+          "location": "[parameters('location')]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Automation/automationAccounts/', parameters('automationAccountName'))]"
+          ],
+          "properties": {
+            "runbookType": "[parameters('runbookType')]",
+            "logVerbose": false,
+            "logProgress": false,
+            "description": "Runbook to get Autopilot devices and send data to Log Analytics.",
+            "publishContentLink": {
+              "uri": "[concat('https://raw.githubusercontent.com/your-repo/scripts/master/', parameters('runbookName'), '.ps1')]",
+              "contentHash": {
+                "algorithm": "SHA256",
+                "value": "HASH_VALUE_OF_YOUR_SCRIPT"
+              },
+              "version": "1.0.0.0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.Automation/automationAccounts/modules",
+      "apiVersion": "2015-10-31",
+      "name": "[concat(parameters('automationAccountName'), '/', variables('modules')[copyIndex()])]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]"
+      ],
+      "copy": {
+        "name": "moduleLoop",
+        "count": "[length(variables('modules'))]"
+      },
+      "properties": {
+        "contentLink": {
+          "uri": "[concat('https://www.powershellgallery.com/api/v2/package/', variables('modules')[copyIndex()], '/latest')]"
+        }
+      }
+    }
+  ]
+}
